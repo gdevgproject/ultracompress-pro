@@ -1,4 +1,4 @@
-// main.js (Phiên bản V19.0 - Tối giản & Tương tác trực tiếp)
+// main.js (V20.0 - Enhanced với Progress Bar)
 document.addEventListener("DOMContentLoaded", () => {
   // --- Khai báo biến DOM ---
   const imageInput = document.getElementById("imageInput");
@@ -15,6 +15,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const previewImage = document.getElementById("previewImage");
   const previewInfo = document.getElementById("previewInfo");
 
+  // Progress Bar Elements
+  const progressContainer = document.getElementById("progressContainer");
+  const progressBar = document.getElementById("progressBar");
+  const progressPercent = document.getElementById("progressPercent");
+  const progressText = document.getElementById("progressText");
+
   // DOM cho trình crop
   const cropperModal = document.getElementById("cropper-modal");
   const cropperCanvas = document.getElementById("cropper-canvas");
@@ -23,11 +29,28 @@ document.addEventListener("DOMContentLoaded", () => {
   const cropperCtx = cropperCanvas.getContext("2d");
 
   // --- State của ứng dụng ---
-  let compressionResult = null; // Sẽ lưu trữ kết quả { success, original, large, small }
-  let blobUrls = []; // Quản lý các URL tạm thời để giải phóng bộ nhớ
-  const appCompressor = new AppImageCompressor(); // Khởi tạo thư viện tùy chỉnh
+  let compressionResult = null;
+  let blobUrls = [];
+  const appCompressor = new AppImageCompressor();
 
-  // --- Logic Trình Crop (Không đổi) ---
+  // --- Progress Bar Functions ---
+  function showProgress() {
+    progressContainer.classList.add("active");
+    infoMessage.style.display = "none";
+  }
+
+  function hideProgress() {
+    progressContainer.classList.remove("active");
+    infoMessage.style.display = "block";
+  }
+
+  function updateProgress(percent, message) {
+    progressBar.style.width = percent + "%";
+    progressPercent.textContent = percent + "%";
+    progressText.textContent = message;
+  }
+
+  // --- Logic Trình Crop ---
   const ZOOM_SENSITIVITY = 1.1;
   let cropState = {
     image: null,
@@ -209,6 +232,7 @@ document.addEventListener("DOMContentLoaded", () => {
     infoMessage.style.color = "var(--dark-gray)";
     resultsArea.style.display = "none";
     uploadArea.style.display = "flex";
+    hideProgress();
     blobUrls.forEach(URL.revokeObjectURL);
     blobUrls = [];
     compressionResult = null;
@@ -231,24 +255,34 @@ document.addEventListener("DOMContentLoaded", () => {
 
   async function startCompression(file) {
     uploadArea.style.display = "none";
-    infoMessage.textContent = "Đang xử lý, vui lòng chờ...";
+    showProgress();
+    updateProgress(0, "Đang khởi tạo...");
 
-    // Gọi thư viện - trái tim của sự đơn giản!
-    const result = await appCompressor.processImage(file);
+    // Callback để nhận tiến trình từ compressor
+    const onProgress = (progress) => {
+      updateProgress(progress.percent, progress.message);
+    };
+
+    const result = await appCompressor.processImage(file, onProgress);
 
     if (result.success) {
-      compressionResult = result; // Lưu kết quả vào state
-      displayResults();
-      infoMessage.textContent = "Hoàn tất!";
+      compressionResult = result;
+      updateProgress(100, "Hoàn tất!");
+      setTimeout(() => {
+        hideProgress();
+        displayResults();
+        infoMessage.textContent = "Nén thành công!";
+        infoMessage.style.color = "var(--success-color)";
+      }, 500);
     } else {
+      hideProgress();
       infoMessage.textContent = `Lỗi: ${result.error}`;
       infoMessage.style.color = "red";
-      resultsArea.style.display = "block"; // Hiển thị để người dùng có thể reset
+      resultsArea.style.display = "block";
     }
   }
 
   function displayResults() {
-    // 1. Hiển thị thông tin ảnh đã crop
     originalInfo.innerHTML = `
       <li><span>Định dạng gốc:</span> <span>${
         compressionResult.original.name
@@ -261,7 +295,6 @@ document.addEventListener("DOMContentLoaded", () => {
       )}</span></li>
     `;
 
-    // 2. Tạo các card kết quả
     generatedVersionsList.innerHTML = "";
     const versions = [
       { name: "Lớn", data: compressionResult.large },
@@ -294,13 +327,10 @@ document.addEventListener("DOMContentLoaded", () => {
       generatedVersionsList.appendChild(card);
     });
 
-    // 3. Kích hoạt các nút và hiển thị khu vực kết quả
     previewControls
       .querySelectorAll(".preview-btn")
       .forEach((btn) => btn.classList.remove("disabled"));
     resultsArea.style.display = "block";
-
-    // 4. Tự động chọn preview mặc định
     previewControls.querySelector('[data-device="large"]').click();
   }
 
@@ -313,7 +343,7 @@ document.addEventListener("DOMContentLoaded", () => {
       .forEach((btn) => btn.classList.remove("active"));
     e.target.classList.add("active");
 
-    const device = e.target.dataset.device; // "large" hoặc "small"
+    const device = e.target.dataset.device;
     const targetVersion = compressionResult[device];
 
     previewImage.src = targetVersion.url;
@@ -373,5 +403,5 @@ document.addEventListener("DOMContentLoaded", () => {
   resetBtn.addEventListener("click", resetUI);
   copyResultsBtn.addEventListener("click", handleCopyResults);
 
-  resetUI(); // Khởi tạo UI
+  resetUI();
 });

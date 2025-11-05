@@ -1507,7 +1507,7 @@ class AppImageCompressor {
 
     this.presetSmall = {
       maxDimension: 420,
-      targetSize: 12 * 1024,
+      targetSize: 15 * 1024,
       aspectRatio: 4 / 3,
     };
 
